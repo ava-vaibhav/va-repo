@@ -1,0 +1,73 @@
+{
+  "nodes": [
+    {
+      "id": "list-issuers",
+      "type": "baseNode",
+      "position": { "x": 300, "y": 50 },
+      "data": {
+        "id": "list-issuers",
+        "label": "List Issuers (Webhook)",
+        "description": "Synchronous webhook entry point that receives an incoming HTTP request from the end user. It expects an Authorization header carrying a Bearer token and holds the connection open until the full Avalara response is ready to return.",
+        "nodeKind": "webhook",
+        "files": ["src/workflows/list-issuers.ts"],
+        "position": { "x": 300, "y": 50 },
+        "steps": [
+          "Receives an HTTP request from the end user",
+          "Captures the raw request context — including all headers and body — for downstream steps",
+          "Operates in sync response mode, so the caller waits for the workflow to complete before receiving a reply"
+        ]
+      }
+    },
+    {
+      "id": "extract-bearer-token",
+      "type": "baseNode",
+      "position": { "x": 300, "y": 175 },
+      "data": {
+        "id": "extract-bearer-token",
+        "label": "Extract Bearer Token",
+        "description": "Reads the Authorization header from the incoming request context and normalises the token into a guaranteed 'Bearer <token>' string. Throws a descriptive error and halts the workflow if the header is absent or empty.",
+        "nodeKind": "action",
+        "files": ["src/workflows/list-issuers.ts"],
+        "position": { "x": 300, "y": 175 },
+        "steps": [
+          "Reads Authorization header (case-insensitive: 'authorization' or 'Authorization')",
+          "Throws if the header is missing or contains no token value",
+          "Strips any existing 'Bearer ' prefix then re-applies it, ensuring the outbound value is always 'Bearer <token>'",
+          "Passes the normalised bearerToken forward to the next step"
+        ]
+      }
+    },
+    {
+      "id": "fetch-issuers",
+      "type": "baseNode",
+      "position": { "x": 300, "y": 300 },
+      "data": {
+        "id": "fetch-issuers",
+        "label": "Fetch Issuers (GET /1099/issuers)",
+        "description": "Calls the Avalara 1099 API's GET /1099/issuers endpoint using the normalised Bearer token forwarded from the previous step. Applies default filters and required Avalara headers, then returns the raw JSON response body to the caller. Throws on any non-2xx status, logging the correlation ID and error body for diagnostics.",
+        "nodeKind": "request",
+        "files": ["src/workflows/list-issuers.ts"],
+        "position": { "x": 300, "y": 300 },
+        "steps": [
+          "Builds query string with filters: $top=100, $count=true, $orderBy=name ASC",
+          "Generates a unique X-Correlation-Id (UUID v4) for Avalara request tracing",
+          "Forwards the normalised Authorization header and sets avalara-version: 2.0",
+          "Throws a descriptive error on non-2xx responses, including the status code and response body",
+          "Returns the raw Avalara JSON response body as-is to the sync webhook caller"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "list-issuers-to-extract-bearer-token",
+      "source": "list-issuers",
+      "target": "extract-bearer-token"
+    },
+    {
+      "id": "extract-bearer-token-to-fetch-issuers",
+      "source": "extract-bearer-token",
+      "target": "fetch-issuers"
+    }
+  ]
+}
