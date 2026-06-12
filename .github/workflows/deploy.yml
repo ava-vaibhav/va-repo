@@ -1,0 +1,98 @@
+name: Versori Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy"
+        required: true
+        default: "cicd-test"
+        type: string
+      dry_run:
+        description: "Generate JWT only; skip API call"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  DEPLOY_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
+  VERSORI_SIGNING_KEY_ID: ${{ secrets.VERSORI_SIGNING_KEY_ID }}
+  VERSORI_EXTERNAL_USER_ID: ${{ secrets.VERSORI_EXTERNAL_USER_ID }}
+  VERSORI_PRIVATE_KEY: ${{ secrets.VERSORI_PRIVATE_KEY }}
+  VERSORI_ORG_ID: ${{ vars.VERSORI_ORG_ID }}
+  VERSORI_API_PATH: ${{ vars.VERSORI_API_PATH }}
+  VERSORI_API_BASE_URL: ${{ vars.VERSORI_API_BASE_URL }}
+
+jobs:
+  deploy:
+    name: Deploy from ${{ github.event.inputs.branch || github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout va-repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+
+      - name: Show deployment context
+        run: |
+          echo "=== Deployment context ==="
+          echo "Repository:       ${{ github.repository }}"
+          echo "Requested branch: ${{ github.event.inputs.branch || github.ref_name }}"
+          echo "Checked out ref:  ${{ github.ref }}"
+          echo "Commit SHA:       ${{ github.sha }}"
+          echo "Triggered by:     ${{ github.actor }}"
+          echo "Dry run:          ${{ github.event.inputs.dry_run }}"
+          echo "Workflow run:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Enforce cicd-test branch
+        run: |
+          if [ "$DEPLOY_BRANCH" != "cicd-test" ]; then
+            echo "ERROR: Only cicd-test branch is allowed for deployment."
+            exit 1
+          fi
+          echo "Branch validation passed: $DEPLOY_BRANCH"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          echo "=== Installing dependencies ==="
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip list
+
+      - name: Validate configuration
+        run: |
+          echo "=== Configuration check ==="
+          test -n "$VERSORI_SIGNING_KEY_ID" || (echo "Missing VERSORI_SIGNING_KEY_ID secret" && exit 1)
+          test -n "$VERSORI_EXTERNAL_USER_ID" || (echo "Missing VERSORI_EXTERNAL_USER_ID secret" && exit 1)
+          test -n "$VERSORI_PRIVATE_KEY" || (echo "Missing VERSORI_PRIVATE_KEY secret" && exit 1)
+          echo "Signing key ID:     configured"
+          echo "External user ID: configured"
+          echo "Private key:        configured (${#VERSORI_PRIVATE_KEY} chars)"
+          echo "Org ID:             ${VERSORI_ORG_ID:-not set}"
+          echo "API path:           ${VERSORI_API_PATH:-not set}"
+
+      - name: Run deploy.py
+        run: |
+          echo "=== Running deploy.py ==="
+          ARGS=(--branch "$DEPLOY_BRANCH")
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          python deploy.py "${ARGS[@]}"
+
+      - name: Deployment result
+        if: always()
+        run: |
+          echo "=== Deployment finished ==="
+          echo "Job status: ${{ job.status }}"
+          echo "Branch:     $DEPLOY_BRANCH"
+          echo "Commit:     ${{ github.sha }}"

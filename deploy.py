@@ -15,6 +15,7 @@ Required configuration:
   - VERSORI_PRIVATE_KEY_FILE
 
 Optional configuration:
+- DEPLOY_BRANCH / GITHUB_REF_NAME (branch being deployed)
 - VERSORI_ORG_ID
 - VERSORI_API_BASE_URL           (default: https://platform.versori.com)
 - VERSORI_API_PATH               (for example: /api/v2/o/{org_id}/users/{external_user_id})
@@ -23,7 +24,7 @@ Optional configuration:
 - VERSORI_TOKEN_LIFETIME_SECONDS (default: 3600)
 
 Examples:
-  python deploy.py --dry-run
+  python deploy.py --branch cicd-test --dry-run
   python deploy.py --api-path "/api/v2/o/{org_id}/users/{external_user_id}"
   python deploy.py --api-path "/api/v2/o/{org_id}/users/{external_user_id}" --method GET
 """
@@ -73,6 +74,26 @@ def read_required_value(cli_value: str | None, env_name: str) -> str:
     if not value:
         raise ValueError(f"Missing required value: {env_name}")
     return value
+
+
+def read_branch(cli_value: str | None) -> str:
+    value = (
+        cli_value
+        or os.getenv("DEPLOY_BRANCH")
+        or os.getenv("GITHUB_REF_NAME")
+        or os.getenv("GITHUB_HEAD_REF")
+    )
+    if not value:
+        raise ValueError(
+            "Missing branch. Pass --branch or set DEPLOY_BRANCH / GITHUB_REF_NAME."
+        )
+    return value
+
+
+def mask_token(token: str) -> str:
+    if len(token) <= 12:
+        return "***"
+    return f"{token[:8]}...{token[-4:]}"
 
 
 def sign_versori_jwt(
@@ -212,6 +233,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="External user id to place in the JWT sub claim. Falls back to VERSORI_EXTERNAL_USER_ID.",
     )
     parser.add_argument(
+        "--branch",
+        help="Git branch being deployed. Falls back to DEPLOY_BRANCH or GITHUB_REF_NAME.",
+    )
+    parser.add_argument(
         "--org-id",
         help="Versori organisation id. Falls back to VERSORI_ORG_ID.",
     )
@@ -255,6 +280,14 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        branch = read_branch(args.branch)
+        in_ci = os.getenv("GITHUB_ACTIONS") == "true"
+
+        print("=== Deployment context ===")
+        print(f"branch: {branch}")
+        print(f"timestamp_utc: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}")
+        print(f"ci_run: {in_ci}")
+
         private_key = read_private_key()
         signing_key_id = read_required_value(
             args.signing_key_id, "VERSORI_SIGNING_KEY_ID"
@@ -277,7 +310,8 @@ def main() -> int:
         print(f"issuer: https://versori.com/sk/{signing_key_id}")
         print(f"subject: {external_user_id}")
         print(f"token_lifetime_seconds: {args.lifetime_seconds}")
-        print(f"jwt_token: {token}")
+        displayed_token = mask_token(token) if in_ci else token
+        print(f"jwt_token: {displayed_token}")
 
         if not api_path:
             print(
@@ -297,7 +331,10 @@ def main() -> int:
 
         print(f"method: {args.method.upper()}")
         print(f"url: {url}")
-        print(f"curl: {curl_command}")
+        if in_ci:
+            print("curl: (redacted in CI logs)")
+        else:
+            print(f"curl: {curl_command}")
 
         if args.dry_run:
             print("Dry run enabled. Skipping API call.")
