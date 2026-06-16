@@ -14,14 +14,27 @@ on:
         default: false
         type: boolean
 
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   VERSORI_ORG_ID, VERSORI_API_PATH, VERSORI_API_BASE_URL,
+#   VERSORI_PROJECT_ID, VERSORI_PROJECT_NAME, VERSORI_PROJECT_ENV
+# Repository secrets:
+#   VERSORI_SIGNING_KEY_ID, VERSORI_EXTERNAL_USER_ID, VERSORI_PRIVATE_KEY,
+#   VERSORI_INTERNAL_TOKEN
+
 env:
   DEPLOY_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
+  GITHUB_SHA: ${{ github.sha }}
   VERSORI_SIGNING_KEY_ID: ${{ secrets.VERSORI_SIGNING_KEY_ID }}
   VERSORI_EXTERNAL_USER_ID: ${{ secrets.VERSORI_EXTERNAL_USER_ID }}
   VERSORI_PRIVATE_KEY: ${{ secrets.VERSORI_PRIVATE_KEY }}
+  VERSORI_INTERNAL_TOKEN: ${{ secrets.VERSORI_INTERNAL_TOKEN }}
   VERSORI_ORG_ID: ${{ vars.VERSORI_ORG_ID }}
   VERSORI_API_PATH: ${{ vars.VERSORI_API_PATH }}
   VERSORI_API_BASE_URL: ${{ vars.VERSORI_API_BASE_URL }}
+  VERSORI_PROJECT_ID: ${{ vars.VERSORI_PROJECT_ID }}
+  VERSORI_PROJECT_NAME: ${{ vars.VERSORI_PROJECT_NAME }}
+  VERSORI_PROJECT_ENV: ${{ vars.VERSORI_PROJECT_ENV }}
+  VERSORI_API_METHOD: POST
 
 jobs:
   deploy:
@@ -74,11 +87,27 @@ jobs:
           test -n "$VERSORI_SIGNING_KEY_ID" || (echo "Missing VERSORI_SIGNING_KEY_ID secret" && exit 1)
           test -n "$VERSORI_EXTERNAL_USER_ID" || (echo "Missing VERSORI_EXTERNAL_USER_ID secret" && exit 1)
           test -n "$VERSORI_PRIVATE_KEY" || (echo "Missing VERSORI_PRIVATE_KEY secret" && exit 1)
+          test -n "$VERSORI_INTERNAL_TOKEN" || (echo "Missing VERSORI_INTERNAL_TOKEN secret" && exit 1)
+          test -n "$VERSORI_ORG_ID" || (echo "Missing VERSORI_ORG_ID variable" && exit 1)
+          test -n "$VERSORI_API_PATH" || (echo "Missing VERSORI_API_PATH variable" && exit 1)
+          test -n "$VERSORI_API_BASE_URL" || (echo "Missing VERSORI_API_BASE_URL variable" && exit 1)
+          test -n "$VERSORI_PROJECT_ID" || (echo "Missing VERSORI_PROJECT_ID variable" && exit 1)
+          test -n "$VERSORI_PROJECT_NAME" || (echo "Missing VERSORI_PROJECT_NAME variable" && exit 1)
+          test -n "$VERSORI_PROJECT_ENV" || (echo "Missing VERSORI_PROJECT_ENV variable" && exit 1)
           echo "Signing key ID:     configured"
-          echo "External user ID: configured"
+          echo "External user ID:   configured"
           echo "Private key:        configured (${#VERSORI_PRIVATE_KEY} chars)"
-          echo "Org ID:             ${VERSORI_ORG_ID:-not set}"
-          echo "API path:           ${VERSORI_API_PATH:-not set}"
+          echo "Internal token:     configured"
+          echo "Org ID:             $VERSORI_ORG_ID"
+          echo "Project ID:         $VERSORI_PROJECT_ID"
+          echo "Project name:       $VERSORI_PROJECT_NAME"
+          echo "Project env:        $VERSORI_PROJECT_ENV"
+          echo "API path:           $VERSORI_API_PATH"
+          echo "API base URL:       $VERSORI_API_BASE_URL"
+          TARBALL_PATH="tarballs/${VERSORI_PROJECT_NAME}/files.tar"
+          echo "Tarball path:       $TARBALL_PATH"
+          test -f "$TARBALL_PATH" || (echo "Missing tarball: $TARBALL_PATH" && exit 1)
+          echo "Tarball:            found ($(wc -c < "$TARBALL_PATH") bytes)"
 
       - name: Run deploy.py
         run: |
