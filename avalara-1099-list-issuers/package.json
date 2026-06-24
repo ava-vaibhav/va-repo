@@ -1,0 +1,17 @@
+{
+  "name": "avalara-1099-list-issuers",
+  "version": "1.0.0",
+  "type": "module",
+  "module": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@versori/run": "^0.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.0",
+    "ts-node": "^10.9.0"
+  }
+}
