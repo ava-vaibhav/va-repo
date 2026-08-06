@@ -9,19 +9,27 @@ on:
         default: "cicd-test"
         type: string
       dry_run:
-        description: "Generate JWT only; skip API call"
+        description: "List files that would deploy; skip real Versori deploy"
         required: false
         default: false
         type: boolean
 
+# Production repository variables (Settings -> Secrets and variables -> Actions -> Variables):
+#   PROD_VERSORI_ORG_ID, PROD_VERSORI_PROJECT_ID, PROD_VERSORI_DEPLOY_DIRECTORY
+# Production repository secrets:
+#   PROD_VERSORI_SIGNING_KEY_ID, PROD_VERSORI_PRIVATE_KEY
+#   Optional: PROD_VERSORI_EXTERNAL_USER_ID (falls back to VERSORI_EXTERNAL_USER_ID)
+
 env:
   DEPLOY_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
-  VERSORI_SIGNING_KEY_ID: ${{ secrets.VERSORI_SIGNING_KEY_ID }}
-  VERSORI_EXTERNAL_USER_ID: ${{ secrets.VERSORI_EXTERNAL_USER_ID }}
-  VERSORI_PRIVATE_KEY: ${{ secrets.VERSORI_PRIVATE_KEY }}
-  VERSORI_ORG_ID: ${{ vars.VERSORI_ORG_ID }}
-  VERSORI_API_PATH: ${{ vars.VERSORI_API_PATH }}
-  VERSORI_API_BASE_URL: ${{ vars.VERSORI_API_BASE_URL }}
+  GITHUB_SHA: ${{ github.sha }}
+  VERSORI_SIGNING_KEY_ID: ${{ secrets.PROD_VERSORI_SIGNING_KEY_ID }}
+  VERSORI_EXTERNAL_USER_ID: ${{ secrets.PROD_VERSORI_EXTERNAL_USER_ID || secrets.VERSORI_EXTERNAL_USER_ID }}
+  VERSORI_PRIVATE_KEY: ${{ secrets.PROD_VERSORI_PRIVATE_KEY }}
+  VERSORI_ORG_ID: ${{ vars.PROD_VERSORI_ORG_ID }}
+  VERSORI_PROJECT_ID: ${{ vars.PROD_VERSORI_PROJECT_ID }}
+  VERSORI_PROJECT_ENV: production
+  VERSORI_DEPLOY_DIRECTORY: ${{ vars.PROD_VERSORI_DEPLOY_DIRECTORY }}
 
 jobs:
   deploy:
@@ -44,12 +52,13 @@ jobs:
           echo "Commit SHA:       ${{ github.sha }}"
           echo "Triggered by:     ${{ github.actor }}"
           echo "Dry run:          ${{ github.event.inputs.dry_run }}"
+          echo "Deploy directory: ${VERSORI_DEPLOY_DIRECTORY:-. (repo root)}"
           echo "Workflow run:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-      - name: Enforce cicd-test branch
+      - name: Validate deploy branch
         run: |
-          if [ "$DEPLOY_BRANCH" != "cicd-test" ]; then
-            echo "ERROR: Only cicd-test branch is allowed for deployment."
+          if [ -z "$DEPLOY_BRANCH" ]; then
+            echo "ERROR: DEPLOY_BRANCH is required."
             exit 1
           fi
           echo "Branch validation passed: $DEPLOY_BRANCH"
@@ -71,14 +80,34 @@ jobs:
       - name: Validate configuration
         run: |
           echo "=== Configuration check ==="
-          test -n "$VERSORI_SIGNING_KEY_ID" || (echo "Missing VERSORI_SIGNING_KEY_ID secret" && exit 1)
-          test -n "$VERSORI_EXTERNAL_USER_ID" || (echo "Missing VERSORI_EXTERNAL_USER_ID secret" && exit 1)
-          test -n "$VERSORI_PRIVATE_KEY" || (echo "Missing VERSORI_PRIVATE_KEY secret" && exit 1)
+          test -n "$VERSORI_SIGNING_KEY_ID" || (echo "Missing PROD_VERSORI_SIGNING_KEY_ID secret" && exit 1)
+          test -n "$VERSORI_EXTERNAL_USER_ID" || (echo "Missing PROD_VERSORI_EXTERNAL_USER_ID or VERSORI_EXTERNAL_USER_ID secret" && exit 1)
+          test -n "$VERSORI_PRIVATE_KEY" || (echo "Missing PROD_VERSORI_PRIVATE_KEY secret" && exit 1)
+          test -n "$VERSORI_ORG_ID" || (echo "Missing PROD_VERSORI_ORG_ID variable" && exit 1)
+          test -n "$VERSORI_PROJECT_ENV" || (echo "Missing VERSORI_PROJECT_ENV variable" && exit 1)
+
+          DEPLOY_DIR="${VERSORI_DEPLOY_DIRECTORY:-.}"
+          DEPLOY_DIR="${DEPLOY_DIR// /}"
+          if [ -z "$DEPLOY_DIR" ] || [ "$DEPLOY_DIR" = "." ]; then
+            DEPLOY_DIR="."
+          fi
+          test -d "$DEPLOY_DIR" || (echo "Deploy directory not found: $DEPLOY_DIR" && exit 1)
+
+          if [ -f "$DEPLOY_DIR/.versori" ]; then
+            echo "Project ID source:  .versori in $DEPLOY_DIR (VERSORI_PROJECT_ID optional)"
+          else
+            test -n "$VERSORI_PROJECT_ID" || (echo "Missing VERSORI_PROJECT_ID variable (no .versori in $DEPLOY_DIR)" && exit 1)
+            echo "Project ID source:  VERSORI_PROJECT_ID"
+          fi
+
           echo "Signing key ID:     configured"
-          echo "External user ID: configured"
+          echo "External user ID:   configured"
           echo "Private key:        configured (${#VERSORI_PRIVATE_KEY} chars)"
-          echo "Org ID:             ${VERSORI_ORG_ID:-not set}"
-          echo "API path:           ${VERSORI_API_PATH:-not set}"
+          echo "Token target:       production"
+          echo "Org ID:             $VERSORI_ORG_ID"
+          echo "Project ID:         ${VERSORI_PROJECT_ID:-from .versori}"
+          echo "Project env:        $VERSORI_PROJECT_ENV"
+          echo "Deploy directory:   $DEPLOY_DIR"
 
       - name: Run deploy.py
         run: |
@@ -96,3 +125,4 @@ jobs:
           echo "Job status: ${{ job.status }}"
           echo "Branch:     $DEPLOY_BRANCH"
           echo "Commit:     ${{ github.sha }}"
+
