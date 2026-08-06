@@ -46,14 +46,6 @@ jobs:
           echo "Dry run:          ${{ github.event.inputs.dry_run }}"
           echo "Workflow run:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-      - name: Enforce cicd-test branch
-        run: |
-          if [ "$DEPLOY_BRANCH" != "cicd-test" ]; then
-            echo "ERROR: Only cicd-test branch is allowed for deployment."
-            exit 1
-          fi
-          echo "Branch validation passed: $DEPLOY_BRANCH"
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
