@@ -20,8 +20,19 @@ env:
   VERSORI_EXTERNAL_USER_ID: ${{ secrets.VERSORI_EXTERNAL_USER_ID }}
   VERSORI_PRIVATE_KEY: ${{ secrets.VERSORI_PRIVATE_KEY }}
   VERSORI_ORG_ID: ${{ vars.VERSORI_ORG_ID }}
+  PROJECT_ID: ${{ vars.PROJECT_ID }}
+  ENVIRONMENT_ID: ${{ vars.ENVIRONMENT_ID }}
   VERSORI_API_PATH: ${{ vars.VERSORI_API_PATH }}
   VERSORI_API_BASE_URL: ${{ vars.VERSORI_API_BASE_URL }}
+  CCS_CONFIG_API_BASE_URL: ${{ vars.CCS_CONFIG_API_BASE_URL }}
+  CCS_CONFIG_API_URL: ${{ vars.CCS_CONFIG_API_URL }}
+  APP_ID: ${{ vars.APP_ID }}
+  APP_VERSION: ${{ vars.APP_VERSION }}
+  SCHEMA_TYPE: ${{ vars.SCHEMA_TYPE }}
+  LAYOUT_TYPE: ${{ vars.LAYOUT_TYPE }}
+  CONFIG_NAME: ${{ vars.CONFIG_NAME }}
+  CONFIG_SCHEMA: ${{ vars.CONFIG_SCHEMA }}
+  CONFIG_LAYOUT: ${{ vars.CONFIG_LAYOUT }}
 
 jobs:
   deploy:
@@ -70,7 +81,18 @@ jobs:
           echo "External user ID: configured"
           echo "Private key:        configured (${#VERSORI_PRIVATE_KEY} chars)"
           echo "Org ID:             ${VERSORI_ORG_ID:-not set}"
+          echo "Project ID:         ${PROJECT_ID:+configured}"
+          echo "Environment ID:     ${ENVIRONMENT_ID:+configured}"
           echo "API path:           ${VERSORI_API_PATH:-not set}"
+          echo "CCS config base URL: ${CCS_CONFIG_API_BASE_URL:-default}"
+          echo "CCS config API URL: ${CCS_CONFIG_API_URL:-not set}"
+          echo "APP_ID:             ${APP_ID:+configured}"
+          echo "APP_VERSION:        ${APP_VERSION:+configured}"
+          echo "SCHEMA_TYPE:        ${SCHEMA_TYPE:+configured}"
+          echo "LAYOUT_TYPE:        ${LAYOUT_TYPE:+configured}"
+          echo "CONFIG_NAME:        ${CONFIG_NAME:+configured}"
+          echo "CONFIG_SCHEMA:      ${CONFIG_SCHEMA:+configured}"
+          echo "CONFIG_LAYOUT:      ${CONFIG_LAYOUT:+configured}"
 
       - name: Run deploy.py
         run: |
