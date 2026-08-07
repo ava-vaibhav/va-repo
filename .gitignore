@@ -3,6 +3,7 @@ pem/
 *.pem
 
 # Python
+.github
 .venv/
 __pycache__/
 *.pyc
